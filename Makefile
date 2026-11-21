@@ -24,7 +24,7 @@ fft-test: fft-test.cpp include/*.h
 	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) -I include -o fft-test fft-test.cpp -lfftw3 -lm
 
 hashtable-test: hashtable-test.cpp include/*.h
-	$(MPICXX) $(CXXFLAGS) $(DEBUG_FLAGS) -I include -o hashtable-test hashtable-test.cpp -DUSE_MPI
+	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) -I include -o hashtable-test hashtable-test.cpp
 	
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@

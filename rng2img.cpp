@@ -122,7 +122,7 @@ int main(int argc, char** argv)
                 uint y = uint(4.f * (float(j) / float(height)));
                 uint bit = x + 8u * y;
 
-                uint32_t v = hash2rgb(hashname, i, j);
+                uint32_t v = hash2rgb(hashname, i, j, 0, 0);
 
                 (*pixel)[0] = uint8_t(((v >> bit) & 1u) * 255u);
                 (*pixel)[1] = uint8_t(((v >> bit) & 1u) * 255u);
@@ -130,7 +130,7 @@ int main(int argc, char** argv)
             }
             else if (qflag)
             {
-                uint32_t v = hash2rgb(hashname, i, j);
+                uint32_t v = hash2rgb(hashname, i, j, 0, 0);
                 uint b = 0;
 
                 if (i >= (width / 2))
@@ -156,7 +156,7 @@ int main(int argc, char** argv)
             }
             else
             {
-                uint32_t v = hash2rgb(hashname, i, j);
+                uint32_t v = hash2rgb(hashname, i, j, 0, 0);
 
                 float scale = 1.f / (float)0xffffffffu;
                 float f = v * scale;

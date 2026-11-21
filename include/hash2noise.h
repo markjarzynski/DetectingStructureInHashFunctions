@@ -7,7 +7,7 @@
 
 float2 hash2(char* hashname, uint2 v, uint2 bitshift = uint2(13,19))
 {
-    v = (uint2(hash2rgb(hashname, v.x, v.y)) >> bitshift) & uint2(1,1);
+    v = (uint2(hash2rgb(hashname, v.x, v.y, 0, 0)) >> bitshift) & uint2(1,1);
 
     return float2(v.x, v.y) * 2.f - 1.f;
 }
