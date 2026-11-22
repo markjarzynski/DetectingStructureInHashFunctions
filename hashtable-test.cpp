@@ -464,6 +464,41 @@ int main(int argc, char** argv)
 
 int usage(char* name)
 {
-    printf("Usage: %s <hashname>\n", name);
+    printf("Usage: %s [OPTIONS] <hashname>\n\n", name);
+    printf("Analyzes patterns in hash functions by extracting neighborhoods and counting matches.\n\n");
+    printf("POSITIONAL ARGUMENTS:\n");
+    printf("  <hashname>              Name of the hash function to analyze (e.g., 'pcg3d', 'xxhash_3', etc.)\n");
+    printf("                          Ignored if -f/--file is used.\n\n");
+    
+    printf("POSITION & SAMPLING OPTIONS:\n");
+    printf("  -x <value>              Initial X coordinate to start sampling (default: 0)\n");
+    printf("  -y <value>              Initial Y coordinate to start sampling (default: 0)\n");
+    printf("  -z <value>              Initial Z coordinate to start sampling (default: 0)\n");
+    printf("  -u <value>              Initial W coordinate to start sampling (default: 0)\n");
+    printf("  -r                      Use random starting positions for X, Y, Z, W (overrides -x, -y, -z, -u)\n\n");
+    
+    printf("SEARCH WINDOW DIMENSIONS (size of data to analyze):\n");
+    printf("  -w, --width <value>     Width of the search window (default: 128)\n");
+    printf("  -h, --height <value>    Height of the search window (default: 128)\n");
+    printf("  -d, --depth <value>     Depth of the search window (default: 1)\n");
+    printf("  -t, --trength <value>   Trength of the search window (default: 1)\n\n");
+    
+    printf("NEIGHBORHOOD DIMENSIONS (kernel size for pattern extraction):\n");
+    printf("  -i, --nwidth <value>    Neighborhood width (default: 5)\n");
+    printf("  -j, --nheight <value>   Neighborhood height (default: 5)\n");
+    printf("  -k, --ndepth <value>    Neighborhood depth (default: 1)\n");
+    printf("  -l, --ntrength <value>  Neighborhood trength (default: 1)\n\n");
+    
+    printf("INPUT/OUTPUT OPTIONS:\n");
+    printf("  -f <filename>           Read search window data from binary file instead of generating from hash\n");
+    printf("  -b <bit>                Analyze only a specific bit (0-31) instead of all bits\n");
+    printf("  -v, --verbose           Enable verbose output (prints progress and detailed statistics)\n\n");
+    
+    printf("EXAMPLES:\n");
+    printf("  %s pcg3d                                         # Analyze 'pcg3d' hash\n", name);
+    printf("  %s -w 256 -h 256 -i 7 -j 7 xxhash32_2            # 256x256 buffer with 7x7 neighborhoods\n", name);
+    printf("  %s -b 15 -v murmur3_2                            # Analyze only bit 15 with verbose output\n", name);
+    printf("  %s -f data.bin -w 512 -h 512 hash                # Read data from file\n", name);
+    printf("  %s -r -w 256 -h 256 -d 256 -i 5 -j 5 -k 5 pcg3d  # 3D analysis with random starting position\n", name);
     return 0;
 }
