@@ -2,10 +2,27 @@
 
 import numpy as np
 import sys
+import argparse
 
 if __name__ == "__main__":
-
-    files = sys.argv[1:]
+    parser = argparse.ArgumentParser(
+        description="Find the maximum value for each column across multiple CSV files.",
+        epilog="Reads columns 1-32 (after the first column) from CSV files and outputs the maximum values."
+    )
+    parser.add_argument(
+        "files",
+        nargs="*",
+        help="CSV files to process"
+    )
+    
+    args = parser.parse_args()
+    
+    # Show help if no files provided
+    if not args.files:
+        parser.print_help()
+        sys.exit(1)
+    
+    files = args.files
 
     # Read 32 score columns after the hash label.
     data = [np.loadtxt(file, delimiter=",", dtype=np.uint64, skiprows=1, usecols=range(1,33)) for file in files]
