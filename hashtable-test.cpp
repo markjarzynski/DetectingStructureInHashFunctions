@@ -493,9 +493,17 @@ int usage(char* name)
     printf("  -f <filename>           Read search window data from binary file instead of generating from hash\n");
     printf("  -b <bit>                Analyze only a specific bit (0-31) instead of all bits\n");
     printf("  -v, --verbose           Enable verbose output (prints progress and detailed statistics)\n\n");
+
+    printf("MULTI-DIMENSIONAL OUTPUT HASH FUNCTIONS:\n");
+    printf("  hash                    Analyze the x component of hash (no component specified)\n");
+    printf("  hash.x                  Analyze the x component of hash\n");
+    printf("  hash.y                  Analyze the y component of hash\n");
+    printf("  hash.z                  Analyze the z component of hash\n");
+    printf("  hash.w                  Analyze the w component of hash\n");
     
     printf("EXAMPLES:\n");
-    printf("  %s pcg3d                                         # Analyze 'pcg3d' hash\n", name);
+    printf("  %s lcg                                           # Analyze the 'lcg' hash\n", name);
+    printf("  %s pcg3d.z                                       # Analyze the z component of the 'pcg3d' hash\n", name);
     printf("  %s -w 256 -h 256 -i 7 -j 7 xxhash32_2            # 256x256 buffer with 7x7 neighborhoods\n", name);
     printf("  %s -b 15 -v murmur3_2                            # Analyze only bit 15 with verbose output\n", name);
     printf("  %s -f data.bin -w 512 -h 512 hash                # Read data from file\n", name);
