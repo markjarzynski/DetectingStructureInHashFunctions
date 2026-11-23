@@ -46,28 +46,32 @@ def _parse_result_file(file_path: Path) -> tuple[str, list[int]]:
     return hash_name, scores
 
 
-def _stat_func(name: str) -> Callable[[list[int]], int]:
-    """Return the aggregation function for a stat name."""
-    stat_name = name.lower()
-    if stat_name == "min":
-        return min
-    if stat_name == "max":
-        return max
-    if stat_name == "median":
-        # There are exactly 9 runs, so the median of integer values is an integer.
-        return lambda values: int(statistics.median(values))
-    raise ValueError(f"Unknown stat '{name}'. Use one of: min, max, median")
+def _stat_funcs(names: str) -> list[tuple[str, Callable[[list[int]], int]]]:
+    """Return list of (name, function) tuples for comma-separated stat names."""
+    funcs = []
+    for name in names.split(","):
+        stat_name = name.strip().lower()
+        if stat_name == "min":
+            funcs.append(("min", min))
+        elif stat_name == "max":
+            funcs.append(("max", max))
+        elif stat_name == "median":
+            # There are exactly 9 runs, so the median of integer values is an integer.
+            funcs.append(("median", lambda values: int(statistics.median(values))))
+        else:
+            raise ValueError(f"Unknown stat '{name}'. Use one of: min, max, median")
+    return funcs
 
 
-def compute_bitplane_stat(base_dir: str | Path, stat: str = "median") -> Aggregated:
-    """Compute per-hash, per-bitplane stat across all runs.
+def compute_bitplane_stats(base_dir: str | Path, stats: str = "median") -> dict[str, dict[str, dict[str, int]]]:
+    """Compute per-hash, per-bitplane stats across all runs.
 
     Args:
         base_dir: Directory containing `run1`, `run2`, ... subdirectories.
-        stat: One of "min", "max", or "median".
+        stats: Comma-separated list of stats (e.g., "min,max,median").
 
     Returns:
-        Dict mapping hash name -> list of 32 aggregated scores.
+        Dict mapping hash name -> stat name -> list of 32 aggregated scores.
     """
     root = Path(base_dir)
     if not root.is_dir():
@@ -94,30 +98,33 @@ def compute_bitplane_stat(base_dir: str | Path, stat: str = "median") -> Aggrega
             for bitplane_idx, score in enumerate(scores):
                 buckets[bitplane_idx].append(score)
 
-    reducer = _stat_func(stat)
-    result: Aggregated = {}
+    stat_funcs = _stat_funcs(stats)
+    result: dict[str, dict[str, list[int]]] = {}
     for hash_name, bitplane_buckets in per_hash_per_bitplane.items():
-        aggregated_scores: ScoreList = []
-        for idx, values in enumerate(bitplane_buckets):
-            if len(values) != expected_runs:
-                raise ValueError(
-                    f"Expected {expected_runs} values for hash '{hash_name}', "
-                    f"bitplane {idx}, found {len(values)}"
-                )
-            aggregated_scores.append(reducer(values))
-        result[hash_name] = aggregated_scores
+        result[hash_name] = {}
+        for stat_name, reducer in stat_funcs:
+            aggregated_scores: ScoreList = []
+            for idx, values in enumerate(bitplane_buckets):
+                if len(values) != expected_runs:
+                    raise ValueError(
+                        f"Expected {expected_runs} values for hash '{hash_name}', "
+                        f"bitplane {idx}, found {len(values)}"
+                    )
+                aggregated_scores.append(reducer(values))
+            result[hash_name][stat_name] = aggregated_scores
 
     return result
 
 
-def _write_csv(result: Aggregated, output_file: Path) -> None:
-    """Write aggregated results as CSV: hash,bit0,...,bit31."""
-    header = ["hash"] + [f"bit{i}" for i in range(32)]
-    with output_file.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-        for hash_name in sorted(result):
-            writer.writerow([hash_name] + result[hash_name])
+def compute_bitplane_stat(base_dir: str | Path, stat: str = "median") -> Aggregated:
+    """Backward compatibility wrapper for single stat.
+    
+    Returns:
+        Dict mapping hash name -> list of 32 aggregated scores (for single stat only).
+    """
+    result = compute_bitplane_stats(base_dir, stat)
+    # Extract single stat from multi-stat result
+    return {hash_name: scores[stat] for hash_name, scores in result.items()}
 
 
 def main() -> None:
@@ -131,8 +138,7 @@ def main() -> None:
     parser.add_argument(
         "--stat",
         default="median",
-        choices=["min", "max", "median"],
-        help="Aggregation function across runs (default: median)",
+        help="Comma-separated aggregation functions: min,max,median (default: median)",
     )
     parser.add_argument(
         "--output",
@@ -140,18 +146,44 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    result = compute_bitplane_stat(args.base_dir, args.stat)
+    result = compute_bitplane_stats(args.base_dir, args.stat)
 
     if args.output:
-        output_file = Path(args.output)
-        _write_csv(result, output_file)
-        print(f"Wrote {args.stat} aggregates for {len(result)} hashes to {output_file}")
+        output_prefix = Path(args.output)
+        # For backward compatibility, if only one stat, write to the specified file
+        # Otherwise, write each stat to output_<stat>.csv
+        stat_list = [s.strip() for s in args.stat.split(",")]
+        if len(stat_list) == 1:
+            stat_name = stat_list[0]
+            output_file = output_prefix
+            header = ["hash"] + [f"bit{i}" for i in range(32)]
+            with output_file.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(header)
+                for hash_name in sorted(result):
+                    writer.writerow([hash_name] + result[hash_name][stat_name])
+            print(f"Wrote {args.stat} aggregates for {len(result)} hashes to {output_file}")
+        else:
+            for stat_name in stat_list:
+                output_file = output_prefix.parent / f"{output_prefix.stem}_{stat_name}.csv"
+                header = ["hash"] + [f"bit{i}" for i in range(32)]
+                with output_file.open("w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(header)
+                    for hash_name in sorted(result):
+                        writer.writerow([hash_name] + result[hash_name][stat_name])
+                print(f"Wrote {stat_name} aggregates for {len(result)} hashes to {output_file}")
         return
 
-    writer = csv.writer(sys.stdout)
-    writer.writerow(["hash"] + [f"bit{i}" for i in range(32)])
-    for hash_name in sorted(result):
-        writer.writerow([hash_name] + result[hash_name])
+    # Print to stdout
+    stat_list = [s.strip() for s in args.stat.split(",")]
+    for stat_idx, stat_name in enumerate(stat_list):
+        if stat_idx > 0:
+            print()
+        writer = csv.writer(sys.stdout)
+        writer.writerow([f"hash_{stat_name}"] + [f"bit{i}" for i in range(32)])
+        for hash_name in sorted(result):
+            writer.writerow([hash_name] + result[hash_name][stat_name])
 
 
 if __name__ == "__main__":
