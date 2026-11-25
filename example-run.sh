@@ -27,7 +27,7 @@ do
 
             mkdir -p results/${width}x${height}x${depth}x${trength}/${i}x${j}x${k}x${l}/run${run}
 
-	    ./hashtable-test -w $width -h $height -d $depth -t $trength -i $i -j $j -k $k -l $l -r $HASH > results/${width}x${height}x${depth}x${trength}/${i}x${j}x${k}x${l}/run${run}/${HASH}.txt
-	done
+	        ./hashtable-test -w $width -h $height -d $depth -t $trength -i $i -j $j -k $k -l $l -r $HASH > results/${width}x${height}x${depth}x${trength}/${i}x${j}x${k}x${l}/run${run}/${HASH}.txt
+	    done
     done
 done
