@@ -9,11 +9,11 @@ height=128
 depth=1
 trength=1
 
-for HASH in ${hashes[@]} ;
+for HASH in ${hashes[@]};
 do
     echo ${HASH}
 
-    for i in 2 3 4 5 6 7 8 ;
+    for i in {2..8};
     do
 	    echo $i
 
@@ -21,13 +21,13 @@ do
         k=1
         l=1
 
-        for run in 1 2 3 4 5 6 7 8 9;
+        for run in {1..9};
         do
 	        echo run${run}
 
             mkdir -p results/${width}x${height}x${depth}x${trength}/${i}x${j}x${k}x${l}/run${run}
 
-	        ./hashtable-test -w $width -h $height -d $depth -t $trength -i $i -j $j -k $k -l $l -r $HASH > results/${width}x${height}x${depth}x${trength}/${i}x${j}x${k}x${l}/run${run}/${HASH}.txt
+	        ./structure-in-noise -w $width -h $height -d $depth -t $trength -i $i -j $j -k $k -l $l -r $HASH > results/${width}x${height}x${depth}x${trength}/${i}x${j}x${k}x${l}/run${run}/${HASH}.txt
 	    done
     done
 done
