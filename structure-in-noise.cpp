@@ -4,12 +4,15 @@
 #include <sys/time.h>
 #include <inttypes.h>
 #include <getopt.h>
+#include <unordered_map>
+#include <vector>
+#include <stddef.h>
+#include <string>
 
 #if defined(USE_MPI)
 #include <mpi.h>
 #endif
 
-#include "uint3.h"
 #include "random.h"
 #include "hash2rgb.h"
 #include "bitshift.h"
@@ -23,20 +26,34 @@
 #define BITS 32
 
 static struct option long_options[] = {
-    {"width",   optional_argument, 0, 'w'},
-    {"height",  optional_argument, 0, 'h'},
-    {"depth",   optional_argument, 0, 'd'},
-    {"trength", optional_argument, 0, 't'},
+    {"width",    optional_argument, 0, 'w'},
+    {"height",   optional_argument, 0, 'h'},
+    {"depth",    optional_argument, 0, 'd'},
+    {"trength",  optional_argument, 0, 't'},
     {"nwidth",   optional_argument, 0, 'i'},
     {"nheight",  optional_argument, 0, 'j'},
     {"ndepth",   optional_argument, 0, 'k'},
     {"ntrength", optional_argument, 0, 'l'},
+    {"bit",      optional_argument, 0, 'b'},
+    {"verbose",  no_argument,       0, 'v'}
 };
 
 int usage(char* name);
 
-uint32_t compare(uint32_t* a, uint32_t* b, int width, int height, int length, int trength, int shift);
-void compare_count(uint64_t* out, uint32_t* a, uint32_t* b, int width, int height, int depth, int trength, float threshold);
+struct Hash
+{
+    size_t operator()(const std::vector<uint8_t>& v) const
+    {
+        size_t hash = 0;
+
+        for (const uint8_t& i : v)
+        {
+            hash ^= (size_t)std::hash<uint8_t>{}(i) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+        }
+
+        return hash;
+    }
+};
 
 int main(int argc, char** argv)
 {
@@ -44,8 +61,11 @@ int main(int argc, char** argv)
         return usage(argv[0]);
 
     int bheight = 128, bwidth = 128, bdepth = 1, btrength = 1;
-    int xi = 0, yi = 0, zi = 0, wi = 0;
-    int nheight = 3, nwidth = 3, ndepth = 1, ntrength = 1;
+    uint32_t xi = 0, yi = 0, zi = 0, wi = 0;
+    int nheight = 5, nwidth = 5, ndepth = 1, ntrength = 1;
+    int bit = 0;
+
+    bool verbose = false;
 
     struct timeval current_time;
     gettimeofday(&current_time, NULL);
@@ -54,22 +74,22 @@ int main(int argc, char** argv)
     char* hashname = NULL;
     char* filename = NULL;
 
-    int c, fflag = 0, option_index = 0;
-    while ((c = getopt_long(argc, argv, "x:y:z:v:rw:h:d:t:i:j:k:l:f:", long_options, &option_index)) != -1)
+    int c, fflag = 0, option_index = 0, bflag = 0;
+    while ((c = getopt_long(argc, argv, "x:y:z:u:rw:h:d:t:i:j:k:l:f:b:v", long_options, &option_index)) != -1)
     {
         switch (c)
         {
         case 'x': // initial x position
-            xi = atoi(optarg);
+            xi = std::stoul(optarg);
             break;
         case 'y': // initial y position
-            yi = atoi(optarg);
+            yi = std::stoul(optarg);
             break;
         case 'z': // initial z position
-            zi = atoi(optarg);
+            zi = std::stoul(optarg);
             break;
-        case 'v': // initial w position
-            wi = atoi(optarg);
+        case 'u': // initial w position
+            wi = std::stoul(optarg);
             break;
         case 'r': // use random x/y positions
             xi = pcg(time);
@@ -105,17 +125,26 @@ int main(int argc, char** argv)
             fflag = 1;
             filename = optarg;
             break;
+        case 'b':
+            bit = atoi(optarg);
+            bflag = 1;
+            break;
+        case 'v':
+            verbose = true;
+            break;
         }
     }
 
     //printf("x: %d, y: %d, w: %d, h: %d, k: %d\n", xi, yi, width, height, h);
 
-    uint32_t buffer[bheight * bwidth * bdepth * btrength];
+    size_t bsize = (size_t)bheight * (size_t)bwidth * (size_t)bdepth * (size_t)btrength;
+    std::vector<uint32_t> buffer;
 
     if (fflag)
     {
+        buffer.resize(bsize);
         FILE* f = fopen(filename, "rb");
-        size_t read_bytes = fread(buffer, sizeof(buffer), 1, f);
+        size_t read_bytes = fread(buffer.data(), sizeof(uint32_t), buffer.size(), f);
         hashname = filename;
         fclose(f);
     }
@@ -124,23 +153,6 @@ int main(int argc, char** argv)
         hashname = argv[argc - 1];
     }
 
-    for (int y = 0; y < bheight; y++)
-    {
-        for (int x = 0; x < bwidth; x++)
-        {
-            for (int z = 0; z < bdepth; z++)
-            {
-                for (int w = 0; w < btrength; w++)
-                {
-                    buffer[((y * bwidth + x) * bdepth + z) * btrength + w] = hash2rgb(hashname, xi + x, yi + y, zi + z, wi + w);
-                }
-            }
-        }
-    }
-
-    int nsize = nheight * nwidth * ndepth * ntrength; // neighborhood size
-
-    uint32_t neighborhood1[nsize], neighborhood2[nsize];
 
     int world_size = 1, world_rank = 0;
 
@@ -151,86 +163,282 @@ int main(int argc, char** argv)
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 #endif
 
-    uint64_t matches = 0;
-    uint64_t bitplane_matches[BITS] = { 0 };
-    uint64_t count_matches[BITS] = { 0 };
-
-    int start = world_rank * (bheight - nheight + 1) / world_size;
-    int end = (world_rank + 1) * (bheight - nheight + 1) / world_size;
-
-    for (int ny1 = start; ny1 < end; ny1++)
+    if (world_rank == 0)
     {
-        for (int nx1 = 0; nx1 < bwidth - nwidth + 1; nx1++)
+        // print input arguments such that test can be reexecuted with the same parameters
+
+        printf("-x %u -y %u -z %u -u %u ", xi, yi, zi, wi);
+        printf("-w %d -h %d -d %d -t %d ", bwidth, bheight, bdepth, btrength);
+        printf("-i %d -j %d -k %d -l %d ", nwidth, nheight, ndepth, ntrength);
+        if (bflag)
+            printf("-b %d ", bit);
+        if (verbose)
+            printf("-v ");
+        if (fflag)
+            printf("-f %s\n", filename);
+        else
+            printf("%s\n", hashname);
+
+        if (verbose)
         {
-            for (int nz1 = 0; nz1 < bdepth - ndepth + 1; nz1++)
+            printf("World size: %d, rank: %d\n", world_size, world_rank);
+        }
+    }
+
+    // check to ensure world_size is a power of 2
+    if (!(world_size > 0 && !(world_size & (world_size - 1))))
+    {
+        fprintf(stderr, "World size (%d) is not a power of 2!\n", world_size); 
+        return 0;
+    }
+
+    int bstart = 0;
+    int bend = BITS;
+
+    int ystart = 0;
+    int yend = bheight - nheight + 1;
+
+    if (bflag)
+    {
+        bstart = bit;
+        bend = bit + 1;
+
+        if (world_size > 1)
+        {
+            ystart = world_rank * (bheight - nheight + 1) / world_size;
+            yend = (world_rank + 1) * (bheight - nheight + 1) / world_size;
+        }
+    }
+    else
+    {
+        if (world_size > 1)
+        {
+            bstart = world_rank * (BITS) / world_size;
+            bend = (world_rank + 1) * (BITS) / world_size;
+        }
+    }
+
+    int nsize = nheight * nwidth * ndepth * ntrength; // neighborhood size
+    std::vector<uint8_t> neighborhood(nsize);
+
+    typedef std::unordered_map<size_t, size_t> bit_map;
+    bit_map bit_maps[BITS];
+
+    auto insert = [&bit_maps](const std::vector<uint8_t>& neighborhood, int bit_index) {
+        size_t hash = Hash{}(neighborhood);
+        auto& bit_map = bit_maps[bit_index];
+
+        if (bit_map.find(hash) == bit_map.end())
+            bit_map.insert({ hash, 1 });
+        else
+            bit_map[hash] = bit_map[hash] + 1;
+    };
+
+    /*
+    typedef std::unordered_map<size_t, std::vector<std::pair<std::vector<uint8_t>, size_t>>> bit_map;
+    std::vector<bit_map> bit_maps(end - start);
+
+    auto insert = [&bit_maps](const std::vector<uint8_t>& neighborhood, int bit_index) {
+        size_t hash = Hash{}(neighborhood);
+
+        auto& bucket = bit_maps[bit_index][hash];
+
+        for (auto& [entry, count] : bucket)
+        {
+            if (entry == neighborhood)
             {
-                for (int nw1 = 0; nw1 < btrength - ntrength  + 1; nw1++)
+                count++;
+                return;
+            }
+        }
+
+        bucket.push_back({ neighborhood, 1 });
+    };
+    */
+
+    uint64_t bit_matches[BITS] = { 0 };
+
+    for (int b = bstart; b < bend; b++)
+    {
+        for (int ny1 = ystart; ny1 < yend; ny1++)
+        {
+            for (int nx1 = 0; nx1 < bwidth - nwidth + 1; nx1++)
+            {
+                for (int nz1 = 0; nz1 < bdepth - ndepth + 1; nz1++)
                 {
-                    crop(buffer, bwidth, bheight, bdepth, btrength, neighborhood1, nx1, ny1, nz1, nw1, nwidth, nheight, ndepth, ntrength);
-
-                    for (int ny2 = 0; ny2 < bheight - nheight + 1; ny2++)
+                    for (int nw1 = 0; nw1 < btrength - ntrength + 1; nw1++)
                     {
-                        for (int nx2 = 0; nx2 < bwidth - nwidth + 1; nx2++)
+                        //printf("%d: %d %d %d %d, %d %d %d %d, %d %d %d %d\n", world_rank, bwidth, bheight, bdepth, btrength, nx1, ny1, nz1, nw1, nwidth, nheight, ndepth, ntrength);
+                        
+                        // get neighborhood
+                        if (fflag)
                         {
-                            for (int nz2 = 0; nz2 < bdepth - ndepth + 1; nz2++)
+                            crop(buffer.data(), bwidth, bheight, bdepth, btrength, neighborhood.data(), nx1, ny1, nz1, nw1, nwidth, nheight, ndepth, ntrength, b);
+                        }
+                        else
+                        {
+                            for (int y = 0; y < nheight; y++)
                             {
-                                for (int nw2 = 0; nw2 < btrength - ntrength + 1; nw2++)
+                                for (int x = 0; x < nwidth; x++)
                                 {
-                                    crop(buffer, bwidth, bheight, bdepth, btrength, neighborhood2, nx2, ny2, nz2, nw2, nwidth, nheight, ndepth, ntrength);
-                                
-                                    for (int b = 0; b < BITS; b++)
+                                    for (int z = 0; z < ndepth; z++)
                                     {
-                                        if ((nx1 == nx2) && (ny1 == ny2) && (nz1 == nz2) && (nw1 == nw2) && (b == 0))
+                                        for (int w = 0; w < ntrength; w++)
                                         {
-                                            rotr(neighborhood2, nsize, 1);
-                                            continue; // same index and same bit
+                                            uint32_t hash = hash2rgb(hashname, nx1 + xi + x, ny1 + yi + y, nz1 + zi + z, nw1 + wi + w);
+                                            neighborhood[((y * nwidth + x) * ndepth + z) * ntrength + w] = (uint8_t)((hash >> b) & 1u);
                                         }
-
-                                        uint32_t comp = compare(neighborhood1, neighborhood2, nwidth, nheight, ndepth, ntrength, 0);
-                                        matches += popcnt(comp);
-
-                                        if (b == 0)
-                                        {
-                                            for (int a = 0; a < BITS; a++)
-                                            {
-                                                bitplane_matches[a] += (comp >> a) & 1;
-                                            }
-
-                                            compare_count(count_matches, neighborhood1, neighborhood2, nwidth, nheight, ndepth, ntrength, 1.0f);
-                                        }
-
-                                        rotr(neighborhood2, nsize, 1);
                                     }
                                 }
                             }
                         }
+                        
+                        insert(neighborhood, b);
                     }
                 }
             }
         }
-    }
 
+        if (verbose)
+            printf("rank %d done inserting into hash table for bit %d.\n", world_rank, b);
+    }
 #if defined(USE_MPI)
-    uint64_t* world_matches = NULL;
-    uint64_t* world_bitplane_matches = NULL;
-    if (world_rank == 0)
+    if (bflag)
     {
-        world_matches = (uint64_t*)malloc(sizeof(uint64_t) * world_size);
-        world_bitplane_matches = (uint64_t*)malloc(sizeof(uint64_t) * world_size * BITS);
-    }
 
-    MPI_Gather(&matches, 1, MPI_UINT64_T, world_matches, 1, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-    MPI_Gather(bitplane_matches, BITS, MPI_UINT64_T, world_bitplane_matches, BITS, MPI_UINT64_T, 0, MPI_COMM_WORLD);
-
-    if (world_rank == 0)
-    {
-        for (int i = 1; i < world_size; i++)
+        struct KeyValue
         {
-            matches += world_matches[i];
-            for (int b = 0; b < BITS; b++)
+            size_t key;
+            size_t value;
+        };
+
+        MPI_Datatype KeyValueTypes[2] = { MPI_UINT64_T, MPI_UINT64_T };
+        int KeyValueBlocklen[2] = { 1, 1 };
+        MPI_Aint KeyValueOffsets[2];
+        KeyValueOffsets[0] = offsetof(KeyValue, key);
+        KeyValueOffsets[1] = offsetof(KeyValue, value);
+        MPI_Datatype KeyValueMPIType;
+        MPI_Type_create_struct(2, KeyValueBlocklen, KeyValueOffsets, KeyValueTypes, &KeyValueMPIType);
+        MPI_Type_commit(&KeyValueMPIType);
+
+        // convert unordered_map bit_maps to size_t array
+        std::vector<KeyValue> bit_maps_vec;
+        for (const auto& [hash, count] : bit_maps[bstart])
+        {
+            bit_maps_vec.push_back({ hash, count });
+        }
+
+        int size = bit_maps_vec.size();
+
+        int* world_bit_maps_size = NULL;
+        int* world_bit_maps_displs = NULL;
+        if (world_rank == 0)
+        {
+            world_bit_maps_size = (int*)malloc(sizeof(int) * world_size);
+            world_bit_maps_displs = (int*)malloc(sizeof(int) * world_size);
+        }
+
+        MPI_Gather(&size, 1, MPI_INT, world_bit_maps_size, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        std::vector<KeyValue> world_bit_maps_vec;
+        if (world_rank == 0)
+        {
+            size_t total_size = 0;
+            for (int i = 0; i < world_size; i++)
             {
-                bitplane_matches[b] += world_bitplane_matches[i * BITS + b];
+                total_size += world_bit_maps_size[i];
+                world_bit_maps_displs[i] = total_size - world_bit_maps_size[i];
             }
+            world_bit_maps_vec.resize(total_size);
+        }
+
+        MPI_Gatherv(bit_maps_vec.data(), bit_maps_vec.size(), KeyValueMPIType, world_bit_maps_vec.data(), world_bit_maps_size, world_bit_maps_displs, KeyValueMPIType, 0, MPI_COMM_WORLD);
+
+        if (world_rank == 0)
+        {
+             for (uint32_t i = world_bit_maps_displs[1]; i < world_bit_maps_vec.size(); i++)
+            {
+                const KeyValue& kv = world_bit_maps_vec[i];
+                size_t hash = kv.key;
+                size_t count = kv.value;
+                
+                if (bit_maps[bstart].find(hash) == bit_maps[bstart].end())
+                    bit_maps[bstart].insert({ hash, count });
+                else
+                    bit_maps[bstart][hash] = bit_maps[bstart][hash] + count;
+            }
+        }
+
+        if (world_rank == 0)
+        {
+            for (int b = 0; b < BITS; b++)
+            {            
+                for (const auto& [hash, count] : bit_maps[b])
+                {
+                    if (count > 1)
+                    {
+                        bit_matches[b] += (uint64_t)count * (uint64_t)(count - 1);
+                    }
+                }
+                
+                if (verbose)
+                {
+                    printf("bit: %d, matches: %" PRIu64 "\n", b, bit_matches[b]);
+                }
+            }
+        }
+    }
+    else
+    {
+        for (int b = bstart; b < bend; b++)
+        {            
+            for (const auto& [hash, count] : bit_maps[b])
+            {
+                if (count > 1)
+                {
+                    bit_matches[b] += (uint64_t)count * (uint64_t)(count - 1);
+                }
+            }
+            
+            if (verbose)
+            {
+                printf("bit: %d, matches: %" PRIu64 "\n", b, bit_matches[b]);
+            }
+        }
+
+        uint64_t* world_bit_matches = NULL;
+        if (world_rank == 0)
+        {
+            world_bit_matches = (uint64_t*)malloc(sizeof(uint64_t) * world_size * BITS);
+        }
+
+        MPI_Gather(bit_matches, BITS, MPI_UINT64_T, world_bit_matches, BITS, MPI_UINT64_T, 0, MPI_COMM_WORLD);
+
+        if (world_rank == 0)
+        {
+            for (int i = 1; i < world_size; i++)
+            {
+                for (int b = 0; b < BITS; b++)
+                {
+                    bit_matches[b] += world_bit_matches[i * BITS + b];
+                }
+            }
+        }
+    }
+#else
+    for (int b = bstart; b < bend; b++)
+    {
+        for (const auto& [hash, count] : bit_maps[b])
+        {
+            if (count > 1)
+            {
+                bit_matches[b] += (uint64_t)count * (uint64_t)(count - 1);
+            }
+        }
+
+        if (verbose)
+        {
+            printf("bit: %d, matches: %" PRIu64 "\n", b, bit_matches[b]);
         }
     }
 #endif
@@ -241,17 +449,7 @@ int main(int argc, char** argv)
 
         for (int b = 0; b < BITS; b++)
         {
-            printf(",%" PRIu64, bitplane_matches[b]);
-        }
-        printf(",%" PRIu64, matches);
-
-        printf("\n");
-
-        printf("%s", hashname);
-
-        for (int b = 0; b < BITS; b++)
-        {
-            printf(",%" PRIu64, count_matches[b]);
+            printf(",%" PRIu64, bit_matches[b]);
         }
 
         printf("\n");
@@ -266,65 +464,49 @@ int main(int argc, char** argv)
 
 int usage(char* name)
 {
-    printf("Usage: %s <hashname>\n", name);
+    printf("Usage: %s [OPTIONS] <hashname>\n\n", name);
+    printf("Analyzes patterns in hash functions by extracting neighborhoods and counting matches.\n\n");
+    printf("POSITIONAL ARGUMENTS:\n");
+    printf("  <hashname>              Name of the hash function to analyze (e.g., 'pcg3d', 'xxhash_3', etc.)\n");
+    printf("                          Ignored if -f/--file is used.\n\n");
+    
+    printf("POSITION & SAMPLING OPTIONS:\n");
+    printf("  -x <value>              Initial X coordinate to start sampling (default: 0)\n");
+    printf("  -y <value>              Initial Y coordinate to start sampling (default: 0)\n");
+    printf("  -z <value>              Initial Z coordinate to start sampling (default: 0)\n");
+    printf("  -u <value>              Initial W coordinate to start sampling (default: 0)\n");
+    printf("  -r                      Use random starting positions for X, Y, Z, W (overrides -x, -y, -z, -u)\n\n");
+    
+    printf("SEARCH WINDOW DIMENSIONS (size of data to analyze):\n");
+    printf("  -w, --width <value>     Width of the search window (default: 128)\n");
+    printf("  -h, --height <value>    Height of the search window (default: 128)\n");
+    printf("  -d, --depth <value>     Depth of the search window (default: 1)\n");
+    printf("  -t, --trength <value>   Trength of the search window (default: 1)\n\n");
+    
+    printf("NEIGHBORHOOD DIMENSIONS (kernel size for pattern extraction):\n");
+    printf("  -i, --nwidth <value>    Neighborhood width (default: 5)\n");
+    printf("  -j, --nheight <value>   Neighborhood height (default: 5)\n");
+    printf("  -k, --ndepth <value>    Neighborhood depth (default: 1)\n");
+    printf("  -l, --ntrength <value>  Neighborhood trength (default: 1)\n\n");
+    
+    printf("INPUT/OUTPUT OPTIONS:\n");
+    printf("  -f <filename>           Read search window data from binary file instead of generating from hash\n");
+    printf("  -b <bit>                Analyze only a specific bit (0-31) instead of all bits\n");
+    printf("  -v, --verbose           Enable verbose output (prints progress and detailed statistics)\n\n");
+
+    printf("MULTI-DIMENSIONAL OUTPUT HASH FUNCTIONS:\n");
+    printf("  hash                    Analyze the x component of hash (no component specified)\n");
+    printf("  hash.x                  Analyze the x component of hash\n");
+    printf("  hash.y                  Analyze the y component of hash\n");
+    printf("  hash.z                  Analyze the z component of hash\n");
+    printf("  hash.w                  Analyze the w component of hash\n");
+    
+    printf("EXAMPLES:\n");
+    printf("  %s lcg                                           # Analyze the 'lcg' hash\n", name);
+    printf("  %s pcg3d.z                                       # Analyze the z component of the 'pcg3d' hash\n", name);
+    printf("  %s -w 256 -h 256 -i 7 -j 7 xxhash32_2            # 256x256 buffer with 7x7 neighborhoods\n", name);
+    printf("  %s -b 15 -v murmur3_2                            # Analyze only bit 15 with verbose output\n", name);
+    printf("  %s -f data.bin -w 512 -h 512 hash                # Read data from file\n", name);
+    printf("  %s -r -w 256 -h 256 -d 256 -i 5 -j 5 -k 5 pcg3d  # 3D analysis with random starting position\n", name);
     return 0;
-}
-
-uint32_t compare(uint32_t* a, uint32_t* b, int width, int height, int depth, int trength, int shift)
-{
-    uint32_t result = UINT32_MAX >> shift;
-
-    for (int i = 0; i < height; i++)
-    {
-        for (int j = 0; j < width; j++)
-        {
-            for (int k = 0; k < depth; k++)
-            {
-                for (int l = 0; l < trength; l++)
-                {
-                    result &= ~(a[((i * width + j) * depth + k) * trength + l] ^ b[((i * width + j) * depth + k) * trength + l]);
-                }
-            }
-        }
-    }
-
-    return result;
-}
-
-uint32_t max_count(int width, int height, int depth, int trength)
-{
-    return width * height * depth * trength;
-}
-
-void compare_count(uint64_t* out, uint32_t* a, uint32_t* b, int width, int height, int depth, int trength, float threshold)
-{
-    uint32_t count[BITS] = { 0 };
-
-    for (int i = 0; i < height; i++)
-    {
-        for (int j = 0; j < width; j++)
-        {
-            for (int k = 0; k < depth; k++)
-            {
-                for (int l = 0; l < trength; l++)
-                {
-                    uint32_t result = ~(a[((i * width + j) * depth + k) * trength + l] ^ b[((i * width + j) * depth + k) * trength + l]);
-                    
-                    for (int m = 0; m < BITS; m++)
-                    {
-                        count[m] += (result >> m) & 1u;
-                    }
-                }
-            }
-        }
-    }
-
-    uint32_t iThreshold = threshold * max_count(width, height, depth, trength);
-    for (int m = 0; m < BITS; m++)
-    {
-        if (count[m] >= iThreshold)
-        {
-            out[m]++;
-        }
-    }
 }

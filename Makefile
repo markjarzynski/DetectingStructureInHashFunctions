@@ -9,34 +9,34 @@ RELEASE_FLAGS := -O3 -DNDEBUG
 SRC := fft-test.cpp
 OBJ := $(SRC:.cpp=.o)
 
-all: structure-in-noise
+all: structure-in-noise rng2img rng2noise fft-test structure-in-noise-reference
 
 structure-in-noise: structure-in-noise.cpp include/*.h
-	$(CXX) $(CXXFLAGS) -I include -o structure-in-noise structure-in-noise.cpp
+	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o structure-in-noise structure-in-noise.cpp
 
 rng2img: rng2img.cpp include/*.h
-	$(CXX) $(CXXFLAGS) -I include -o rng2img rng2img.cpp
+	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o rng2img rng2img.cpp
 
 rng2noise: rng2noise.cpp include/*.h
-	$(CXX) $(CXXFLAGS) -I include -o rng2noise rng2noise.cpp
+	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o rng2noise rng2noise.cpp
 
 fft-test: fft-test.cpp include/*.h
-	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) -I include -o fft-test fft-test.cpp -lfftw3 -lm
+	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o fft-test fft-test.cpp -lfftw3 -lm
 
-hashtable-test: hashtable-test.cpp include/*.h
-	$(CXX) $(CXXFLAGS) $(DEBUG_FLAGS) -I include -o hashtable-test hashtable-test.cpp
+structure-in-noise-reference: structure-in-noise-reference.cpp include/*.h
+	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o structure-in-noise-reference structure-in-noise-reference.cpp
 	
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 quicktest:
-	for i in city esgtsa_linear esgtsa_nested iqint1_linear iqint1_nested iqint2 iqint3 jkiss32_linear jkiss32_nested lcg_linear lcg_nested md5 murmur3 pcg3d pcg4d ranlim32_linear ranlim32_nested superfast tea2 tea3 tea4 tea5 wang_linear wang_nested xorshift128 xorshift32_linear xorshift32_nested xxhash32 hybridtaus "-f /dev/random"; \
+	for i in city esgtsa_linear2 esgtsa_nested2 iqint1_linear2 iqint1_nested2 iqint2 iqint3 jkiss32_linear2 jkiss32_nested2 lcg_linear2 lcg_nested2 md5 murmur3 pcg3d.z pcg4d.w ranlim32_linear2 ranlim32_nested2 superfast_2 tea2.y tea3.y tea4.y tea5.y wang_linear2 wang_nested2 xorshift128 xorshift32_linear2 xorshift32_nested2 xxhash32_2 hybridtaus "-f /dev/random"; \
     do \
-        ./structure-in-noise -r -w 32 -h 32 -k 3 $$i; \
+        ./structure-in-noise -r -w 32 -h 32 -i 3 -j 3 $$i; \
     done
 
 testdevrandom:
-	./structure-in-noise -w 128 -h 128 -k 3 -f devrandom
+	./structure-in-noise -w 128 -h 128 -i 3 -j 3 -f devrandom
 
 .PHONY: convert archive clean clobber
 convert:
@@ -53,4 +53,4 @@ clean:
 	rm -rf *.ppm *.png
 
 clobber: clean
-	rm -rf structure-in-noise rng2img rng2noise
+	rm -rf structure-in-noise structure-in-noise-reference rng2img rng2noise fft-test
