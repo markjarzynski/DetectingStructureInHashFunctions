@@ -1,8 +1,12 @@
 .DS_Store
 
 structure-in-noise
+structure-in-noise-reference
 rng2img
 rng2noise
+fft-test
 
 *.ppm
 *.png
+
+__pycache__/

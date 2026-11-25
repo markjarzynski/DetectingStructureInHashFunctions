@@ -1,19 +1,94 @@
-Structure in Noise
-==================
+Detecting Structure in Hash Functions
+=====================================
 
-Finding repeating patterns, artifacts and structure in PRNGs and hash functions.
+Finding repeating patterns, artifacts, and structure in Pseudo Random Hash Functions (PRHFs).
+
+Building
+--------
+
+If compiling `fft-test`, first install the required dependency:
+
+```bash
+sudo apt-get install libfftw3-dev
+```
+
+Compile all binaries using:
+
+```bash
+make
+```
+
+This will compile the following tools:
+
+- `structure-in-noise` - Main pattern analysis tool for examining hash functions and PRNGs
+- `structure-in-noise-reference` - Reference implementation for validation
+- `rng2img` - Converts RNG output to PPM image format
+- `rng2noise` - Processes RNG data
+- `fft-test` - FFT-based frequency analysis (requires libfftw3-dev)
+
+To clean up compiled binaries:
+
+```bash
+make clobber
+```
 
 
-Utilities: Bitplane Aggregation and Timing Join
------------------------------------------------
+Usage
+-----
+
+**structure-in-noise**: Analyzes patterns in hash functions by extracting neighborhoods and counting matches.
+
+Basic usage:
+
+```bash
+./structure-in-noise <hashname> [OPTIONS]
+```
+
+Common options:
+
+- `-w <value>` : Width of the search window (default: 128)
+- `-h <value>` : Height of the search window (default: 128)
+- `-i <value>` : Neighborhood width (default: 5)
+- `-j <value>` : Neighborhood height (default: 5)
+- `-b <bit>` : Analyze only a specific bit (0-31)
+- `-r` : Use random starting positions
+- `-v` : Verbose output
+
+Examples:
+
+```bash
+# Analyze the 'lcg' hash function with default settings
+./structure-in-noise lcg
+
+# Analyze the z component of 'pcg3d' with verbose output
+./structure-in-noise -v pcg3d.z
+
+# Analyze with larger neighborhoods (7x7) and 256x256 buffer
+./structure-in-noise -w 256 -h 256 -i 7 -j 7 xxhash32_2
+
+# Analyze only bit 15 with random starting positions
+./structure-in-noise -r -b 15 murmur3_2
+
+# 3D analysis with 256x256x256 buffer and random starting position
+./structure-in-noise -r -w 256 -h 256 -d 256 -i 5 -j 5 -k 5 pcg3d
+```
+
+**Quick test**: Run pattern analysis on a selection of hash functions:
+
+```bash
+make quicktest
+```
+
+
+Utilities
+---------
 
 The repository includes two helper scripts for combining run outputs with timing data:
 
 - `utils/aggregate_bitplane_runs.py`
 - `utils/export_timing_and_best_bitplane.py`
 
-`aggregate_bitplane_runs.py`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### `aggregate_bitplane_runs.py`
 
 Aggregates per-hash, per-bitplane scores across `run1`..`run9` and computes one of:
 
@@ -39,8 +114,7 @@ python utils/aggregate_bitplane_runs.py \
 ```
 
 
-`export_timing_and_best_bitplane.py`
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+### `export_timing_and_best_bitplane.py`
 
 Produces a CSV with:
 
