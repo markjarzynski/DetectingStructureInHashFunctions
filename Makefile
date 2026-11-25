@@ -1,7 +1,7 @@
 CXX :=g++
 MPICXX :=mpicxx
 CXXFLAGS := -Wall -Wextra
-TARGET := structure-in-noise
+TARGET := structure-in-hash-functions
 
 DEBUG_FLAGS := -g -O0 -DDEBUG
 RELEASE_FLAGS := -O3 -DNDEBUG
@@ -9,10 +9,10 @@ RELEASE_FLAGS := -O3 -DNDEBUG
 SRC := fft-test.cpp
 OBJ := $(SRC:.cpp=.o)
 
-all: structure-in-noise rng2img rng2noise fft-test structure-in-noise-reference
+all: structure-in-hash-functions rng2img rng2noise fft-test structure-in-hash-functions-reference
 
-structure-in-noise: structure-in-noise.cpp include/*.h
-	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o structure-in-noise structure-in-noise.cpp
+structure-in-hash-functions: structure-in-hash-functions.cpp include/*.h
+	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o structure-in-hash-functions structure-in-hash-functions.cpp
 
 rng2img: rng2img.cpp include/*.h
 	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o rng2img rng2img.cpp
@@ -23,8 +23,8 @@ rng2noise: rng2noise.cpp include/*.h
 fft-test: fft-test.cpp include/*.h
 	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o fft-test fft-test.cpp -lfftw3 -lm
 
-structure-in-noise-reference: structure-in-noise-reference.cpp include/*.h
-	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o structure-in-noise-reference structure-in-noise-reference.cpp
+structure-in-hash-functions-reference: structure-in-hash-functions-reference.cpp include/*.h
+	$(CXX) $(CXXFLAGS) $(RELEASE_FLAGS) -I include -o structure-in-hash-functions-reference structure-in-hash-functions-reference.cpp
 	
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
@@ -53,4 +53,4 @@ clean:
 	rm -rf *.ppm *.png
 
 clobber: clean
-	rm -rf structure-in-noise structure-in-noise-reference rng2img rng2noise fft-test
+	rm -rf structure-in-hash-functions structure-in-hash-functions-reference rng2img rng2noise fft-test

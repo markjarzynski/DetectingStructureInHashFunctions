@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             // Path to the executable produced by your Makefile
-            "program": "${workspaceFolder}/structure-in-noise", 
+            "program": "${workspaceFolder}/structure-in-hash-functions", 
             "args": [
                 "lcg_linear2",
                 //"-w", "8", "-h", "8", "-d", "1", "-t", "1",

@@ -124,6 +124,14 @@ int main(int argc, char** argv)
 
 int usage()
 {
-    fprintf(stderr, "Usage: rng2noise [hash]\n");
+    fprintf(stderr, "Usage: rng2noise [options] [hash]\n");
+    fprintf(stderr, "\nFlags:\n");
+    fprintf(stderr, "  -f <filename>   Read from binary file instead of hash\n");
+    fprintf(stderr, "  -w <width>      Image width (default: 256)\n");
+    fprintf(stderr, "  -h <height>     Image height (default: 256)\n");
+    fprintf(stderr, "  -o <filename>   Output filename (default: <hash>.ppm)\n");
+    fprintf(stderr, "  -s <scale>      Noise scale (default: 16.0)\n");
+    fprintf(stderr, "  -a <value>      First noise parameter (default: 13)\n");
+    fprintf(stderr, "  -b <value>      Second noise parameter (default: 19)\n");
     return 1;
 }

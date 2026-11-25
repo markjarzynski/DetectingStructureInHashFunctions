@@ -189,6 +189,14 @@ int main(int argc, char** argv)
 
 int usage()
 {
-    fprintf(stderr, "Usage: rng2img [hash]\n");
+    fprintf(stderr, "Usage: rng2img [options] [hash]\n");
+    fprintf(stderr, "\nFlags:\n");
+    fprintf(stderr, "  -b              Bit mode: extract individual bits from hash\n");
+    fprintf(stderr, "  -c              Color mode: use 3-channel color output\n");
+    fprintf(stderr, "  -q              Quad mode: divide image into quadrants\n");
+    fprintf(stderr, "  -f <filename>   Read from binary file instead of hash\n");
+    fprintf(stderr, "  -w <width>      Image width (default: 256)\n");
+    fprintf(stderr, "  -h <height>     Image height (default: 256)\n");
+    fprintf(stderr, "  -o <filename>   Output filename (default: <hash>.ppm)\n");
     return 1;
 }
