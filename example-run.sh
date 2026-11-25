@@ -2,10 +2,7 @@
 hashes=(pcg_linear2
 pcg_nested2
 pcg_lcgcombine2
-pcg4d2.x
-pcg4d2.y
-pcg4d2.z
-pcg4d2.w)
+)
 
 width=128
 height=128
@@ -18,7 +15,7 @@ do
 
     for i in 2 3 4 5 6 7 8 ;
     do
-	echo $i
+	    echo $i
 
         j=${i}
         k=1
@@ -26,7 +23,7 @@ do
 
         for run in 1 2 3 4 5 6 7 8 9;
         do
-	    echo run${run}
+	        echo run${run}
 
             mkdir -p results/${width}x${height}x${depth}x${trength}/${i}x${j}x${k}x${l}/run${run}
 
