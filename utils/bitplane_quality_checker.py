@@ -7,8 +7,25 @@ of the max /dev/random baseline.
 Usage:
     python3 bitplane_quality_checker.py [results_dir]
     
-If results_dir is provided, only checks that specific window/neighborhood.
-Otherwise, checks all configurations in results/.
+    If results_dir is provided, only checks that specific window/neighborhood.
+    Otherwise, checks all configurations in results/.
+
+    This script evaluates the quality of bitplane indices for different hash
+    functions by comparing their scores against a /dev/random baseline.
+
+    For each hash function and each bitplane index (0-31), it checks whether
+    the score is acceptable relative to /dev/random's worst-case performance.
+    A bitplane index is considered "good" if its score is at or below a
+    threshold determined by: max_baseline * (1 + margin/100), where max_baseline
+    is /dev/random's worst-performing index.
+
+    The --margin flag controls the tolerance level. A margin of 0 means
+    bitplane indices must perform as well as or better than /dev/random's
+    worst case. A margin of 5 allows up to 5% degradation compared to
+    /dev/random's worst case.
+
+    Output shows the ranges of good bitplane indices for each hash function,
+    formatted as ranges (e.g., 0-15, 20-31) for readability.
 """
 
 import sys
@@ -182,7 +199,8 @@ def check_neighborhood(neighborhood_dir, margin_percent=5):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Check bitplane quality against /dev/random baseline (per-index)"
+        description="""Check bitplane quality against /dev/random baseline (per-index).""",
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
         "results_dir",
@@ -197,6 +215,16 @@ def main():
         help="Allowed margin of error as a percentage (default: 0). "
              "A margin of 0 means scores must be <= the max baseline. "
              "A margin of 5 means scores up to 5%% above the max baseline are considered good.",
+    )
+    parser.add_argument(
+        "--show-baselines",
+        action="store_true",
+        help="Show /dev/random baseline statistics (min, median, max).",
+    )
+    parser.add_argument(
+        "--show-dimensions",
+        action="store_true",
+        help="Show window and neighborhood dimensions.",
     )
     args = parser.parse_args()
     
@@ -222,17 +250,18 @@ def main():
         
         good_index_ranges, baselines = check_neighborhood(check_dir, args.margin)
         
-        print(f"{window_size} / {neighborhood_size}:")
-        if baselines:
-            print(f"  /dev/random min:    {baselines.get('min', 'N/A')}")
-            print(f"  /dev/random median: {baselines.get('median', 'N/A')}")
-            print(f"  /dev/random max:    {baselines.get('max', 'N/A')}")
+        if args.show_dimensions:
+            print(f"{window_size} / {neighborhood_size}:")
+        if args.show_baselines and baselines:
+            print(f"/dev/random min: {baselines.get('min', 'N/A')}")
+            print(f"/dev/random median: {baselines.get('median', 'N/A')}")
+            print(f"/dev/random max: {baselines.get('max', 'N/A')}")
         
         if good_index_ranges:
             for bp_name in sorted(good_index_ranges.keys()):
                 indices = good_index_ranges[bp_name]
                 formatted = format_indices(indices)
-                print(f"  {bp_name}: {formatted}")
+                print(f"{bp_name}: {formatted}")
         else:
             print(f"  No good bitplane indices found")
     
@@ -267,17 +296,20 @@ def main():
                     print(f"  WARNING: Could not get devrandom baseline for {window_size} / {neighborhood_size}")
                     continue
                 
-                print(f"\n{window_size} / {neighborhood_size}:")
-                if baselines:
-                    print(f"  /dev/random min:    {baselines.get('min', 'N/A')}")
-                    print(f"  /dev/random median: {baselines.get('median', 'N/A')}")
-                    print(f"  /dev/random max:    {baselines.get('max', 'N/A')}")
+                if args.show_dimensions:
+                    print(f"\n{window_size} / {neighborhood_size}:")
+                else:
+                    print()
+                if args.show_baselines and baselines:
+                    print(f"/dev/random min: {baselines.get('min', 'N/A')}")
+                    print(f"/dev/random median: {baselines.get('median', 'N/A')}")
+                    print(f"/dev/random max: {baselines.get('max', 'N/A')}")
                 
                 if good_index_ranges:
                     for bp_name in sorted(good_index_ranges.keys()):
                         indices = good_index_ranges[bp_name]
                         formatted = format_indices(indices)
-                        print(f"  {bp_name}: {formatted}")
+                        print(f"{bp_name}: {formatted}")
                 else:
                     print(f"  No good bitplane indices found")
 
