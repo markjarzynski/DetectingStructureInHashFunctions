@@ -1,7 +1,7 @@
 .DS_Store
 
-structure-in-noise
-structure-in-noise-reference
+structure-in-hash-functions
+structure-in-hash-functions--reference
 rng2img
 rng2noise
 fft-test
