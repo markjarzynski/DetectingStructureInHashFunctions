@@ -1,0 +1,4 @@
+[submodule "hash-perf"]
+	path = hash-perf
+	url = git@github.com:markjarzynski/TitanEngine.git
+	branch = hash-perf
